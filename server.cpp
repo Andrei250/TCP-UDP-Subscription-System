@@ -6,6 +6,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <unordered_map>
+#include <vector>
 #include "upd.h"
 #include "helpers.h"
 
@@ -20,10 +22,14 @@ fd_set readFds, tmpFds;
 int fdMax, valoareReturnata;
 char buffer[BUFFLEN];
 bool runServer = true;
+unordered_map<int, string> socketIdConnection;
+unordered_map<string, bool> idConnected;
+unordered_map<string, vector<string>> topicId;
+
 
 void portError(char *fileName) {
     fprintf(stderr, "Fisierul %s nu are un PORT specificat\n", fileName);
-    exit(0);
+    exit(1);
 }
 
 void openSockets() {
@@ -107,17 +113,28 @@ int main(int argc, char **argv) {
                     FD_SET(acceptedSock, &readFds);
                     fdMax = max(fdMax, acceptedSock);
 
-                    printf("New client %d connected from %s:%d.\n", acceptedSock, 
+                    memset(buffer, 0, BUFFLEN);
+                    int numberOfBytes = recv(acceptedSock, buffer, sizeof(buffer), 0);
+                    DIE(numberOfBytes < 0, "Eroare la primirea ID-ului de la un client TCP\n");
+
+                    printf("New client %s connected from %s:%d.\n", buffer, 
                                 inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port));
+
+                    socketIdConnection[acceptedSock] = string(buffer);
+                    idConnected[string(buffer)] = true;
                 } else { // iau info de la un client TCP
                     memset(buffer, 0, BUFFLEN);
                     int numberOfBytes = recv(i, buffer, sizeof(buffer), 0);
                     DIE(numberOfBytes < 0, "Eroare la primirea informatiilor de la un client TCP!\n");
 
                     if (numberOfBytes == 0) {
-                        printf("CLient %d disconnected.\n", i);
+                        string id = socketIdConnection[i];
+
+                        cout << "Client " << id << " disconnected.\n";
                         close(i);
                         FD_CLR(i, &readFds);
+                        socketIdConnection.erase(i);
+                        idConnected[id] = false;
                     }
                 }
             }
