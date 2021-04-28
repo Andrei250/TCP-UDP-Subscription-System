@@ -18,6 +18,7 @@ socklen_t sockLen = sizeof(struct sockaddr_in);
 fd_set readFds, tmpFds;
 int fdMax, valoareReturnata;
 char buffer[BUFFLEN];
+bool runServer = true;
 
 void portError(char *fileName) {
     fprintf(stderr, "Fisierul %s nu are un PORT specificat", fileName);
@@ -41,8 +42,14 @@ void openSockets() {
     binder = bind(sockUDP, (struct sockaddr *) &servAddr, sockLen);
     DIE(binder < 0, "Nu s-a putut face bind pe socket-ul UDP!");
 
-    listener = listen(sockUDP, SOMAXCONN);
-    DIE(listener < 0, "Nu s-a putut asculta pe socket-ul UDP!");
+    // listener = listen(sockUDP, SOMAXCONN);
+    // DIE(listener < 0, "Nu s-a putut asculta pe socket-ul UDP!");
+}
+
+void closeServer() {
+    runServer = false;
+    close(sockUDP);
+    close(sockTCP);
 }
 
 int main(int argc, char **argv) {
@@ -74,20 +81,24 @@ int main(int argc, char **argv) {
     FD_SET(0, &readFds);
     fdMax = max(sockTCP, sockUDP);
 
-    while (1) {
+
+
+    while (runServer) {
         tmpFds = readFds;
         // selectam un file descriptor de pe care sa citim
         valoareReturnata = select(fdMax + 1, &tmpFds, NULL, NULL, NULL);
         DIE(valoareReturnata < 0, "Eroare la selectia socket-ului de citire!");
 
-        for (int i = 0; i <= fdMax; ++i) {
+        for (int i = 0; i <= fdMax && runServer; ++i) {
             if (FD_ISSET(i, &tmpFds)) {
                 if (i == 0) {
                     memset(buffer, 0, BUFFLEN);
-                    int n = recv(i, buffer, sizeof(buffer), 0);
-                    DIE(n < 0, "Eroare la receive de la STDIN!");
 
-                    printf("AM primit %s\n", buffer);
+                    cin.getline(buffer, BUFFLEN);
+                    
+                    if (strcmp(buffer, "exit") == 0) {
+                        closeServer();
+                    }
                 }
             }
         }
