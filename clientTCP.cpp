@@ -66,7 +66,10 @@ int main(int argc, char ** argv) {
         } else {
             memset(buffer, 0, BUFFLEN);
 			recv(sock, buffer, BUFFLEN, 0);
-			// printf("%s\n", buffer);
+			
+            if (strcmp(buffer, "exit") == 0) {
+                closeClient();
+            }
         }
 
     }

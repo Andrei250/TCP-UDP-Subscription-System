@@ -48,13 +48,21 @@ void openSockets() {
 
     binder = bind(sockUDP, (struct sockaddr *) &servAddr, sockLen);
     DIE(binder < 0, "Nu s-a putut face bind pe socket-ul UDP!\n");
-
-    // listener = listen(sockUDP, SOMAXCONN);
-    // DIE(listener < 0, "Nu s-a putut asculta pe socket-ul UDP!");
 }
 
 void closeServer() {
     runServer = false;
+    memset(buffer, 0, BUFFLEN);
+    sprintf(buffer, "exit");
+
+    for (int i = 3; i <= fdMax; ++i) {
+        if (FD_ISSET(i, &readFds) && i != sockUDP && i != sockTCP) {
+            int ans = send(i, buffer, sizeof(buffer), 0);
+            DIE(ans < 0, "Nu se poate comunica cu clientul TCP!\n");
+            close(i);
+        }
+    }
+
     close(sockUDP);
     close(sockTCP);
 }
