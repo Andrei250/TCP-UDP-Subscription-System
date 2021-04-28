@@ -62,6 +62,9 @@ int main(int argc, char ** argv) {
             
             if (strcmp(buffer, "exit") == 0) {
                 closeClient();
+            } else {
+                ans = send(sock, buffer, sizeof(buffer), 0);
+                DIE(ans < 0, "Nu s-a putut trimite la server de la clientul TCP!");
             }
         } else {
             memset(buffer, 0, BUFFLEN);
