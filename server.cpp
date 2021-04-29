@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <unordered_map>
+#include <sstream>
 #include <vector>
 #include "upd.h"
 #include "helpers.h"
@@ -24,7 +25,7 @@ char buffer[BUFFLEN];
 bool runServer = true;
 unordered_map<int, string> socketIdConnection;
 unordered_map<string, bool> idConnected;
-unordered_map<string, vector<string>> topicId;
+unordered_map<string, vector<int>> topicId;
 
 
 void portError(char *fileName) {
@@ -143,6 +144,23 @@ int main(int argc, char **argv) {
                         FD_CLR(i, &readFds);
                         socketIdConnection.erase(i);
                         idConnected[id] = false;
+                    } else {
+                        string buff = string(buffer);
+                        istringstream ss(buff);
+                        string word;
+                        string topic;
+                        string SF;
+
+                        ss >> word;
+                        
+                        if (word == "subscribe") {
+                            ss >> topic >> SF;
+
+                            topicId[topic].push_back(i);
+                        } else if (word == "unsubscribe") {
+                            ss >> topic;
+                        }
+
                     }
                 }
             }

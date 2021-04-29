@@ -8,7 +8,7 @@ subscriber:
 
 run_subscribers:
 	./subscriber dadada 127.0.0.1 12346
-	./subscriber nununu 127.0.0.1 12346
+	# ./subscriber nununu 127.0.0.1 12346
 
 clean:
 	rm -rf server subscriber
