@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <sstream>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -59,12 +60,27 @@ int main(int argc, char ** argv) {
         if (FD_ISSET(0, &tmpFds)) {
             memset(buffer, 0, BUFFLEN);
             cin.getline(buffer, BUFFLEN);
+
+            string buff = string(buffer);
+            istringstream ss(buff);
+            string word;
+
+            ss >> word;
             
             if (strcmp(buffer, "exit") == 0) {
                 closeClient();
-            } else {
+            } else if (word == "subscribe" || word == "unsubscribe") {
                 ans = send(sock, buffer, sizeof(buffer), 0);
-                DIE(ans < 0, "Nu s-a putut trimite la server de la clientul TCP!");
+                DIE(ans < 0, "Nu s-a putut trimite la server de la clientul TCP!\n");
+
+                string topic;
+                ss >> topic;
+
+                if (word == "subscribe") {
+                    cout << "Subscribed to " << topic << '\n';
+                } else {
+                    cout << "Unsubscribed from " << topic << '\n';
+                }
             }
         } else {
             memset(buffer, 0, BUFFLEN);
