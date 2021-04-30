@@ -6,6 +6,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <netinet/tcp.h>
 #include <unordered_map>
 #include <sstream>
 #include <vector>
@@ -21,12 +22,15 @@ socklen_t sockLen = sizeof(struct sockaddr_in);
 socklen_t clientLen = sizeof(struct sockaddr_in);
 fd_set readFds, tmpFds;
 int fdMax, valoareReturnata;
-char buffer[BUFFLEN];
+char buffer[BUFFLEN], buffy[BUFFLEN];
 bool runServer = true;
 unordered_map<int, string> socketIdConnection;
-unordered_map<string, bool> idConnected;
-unordered_map<string, vector<int>> topicId;
-
+unordered_map<string, int> idConnected;// 0 nu a fost deloc, 1 a fost, 2 e conectat
+unordered_map<string, vector<pair<string, int>>> topicId;
+unordered_map<string, vector<string>> messagesQueue;
+unordered_map<string, int> idSocketConnection;
+const int VALUE = 1;
+string message[4] = {"INT", "SHORT REAL", "FLOAT", "STRING"};
 
 void portError(char *fileName) {
     fprintf(stderr, "Fisierul %s nu are un PORT specificat\n", fileName);
@@ -66,6 +70,16 @@ void closeServer() {
 
     close(sockUDP);
     close(sockTCP);
+}
+
+bool checkExistence(string topic, string client) {
+    for (auto it : topicId[topic]) {
+        if (it.first == client) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 int main(int argc, char **argv) {
@@ -112,25 +126,136 @@ int main(int argc, char **argv) {
                     
                     if (strcmp(buffer, "exit") == 0) {
                         closeServer();
+                    } else {
+                        cout << "Nu exista aceasta comanda.\n";
                     }
                 } else if (i == sockUDP) { // iau info de la un client UDP
                     continue;
+                    clientLen = sizeof(clientAddr);
+                    memset(&clientAddr, 0, sizeof(clientAddr));
+                    memset(buffer, 0, BUFFLEN);      
+                    int ans = recvfrom(i, (char *)buffer, BUFFLEN, 0, (struct sockaddr *) &clientAddr, &clientLen);
+                    DIE(ans < 0, "Nu s-a putut prelua mesajul de la clientul UDP!\n");
+
+                    udp_message msg;
+                    char dataType[2];
+
+                    // sscanf(buffer, "%s %s %s", msg.topic, dataType, msg.payload);
+                    // msg.tip_date = dataType[0];
+                    udp_message * msg2 = (udp_message*) buffer;
+
+                    strcpy(msg.topic, buffer); // topic
+                    msg.tip_date = buffer[50]; // data_type
+
+                    char mess[50];
+                    strcpy(mess, "DADADA");
+
+                    for (int j = 3; j <= fdMax; ++j) {
+                        if (FD_ISSET(j, &readFds)) {
+                            if (msg2->tip_date == 0 && j != sockTCP && j != sockUDP) {
+                                send(j, mess, strlen(mess), 0);
+                            }
+                        }
+                    }
+                    
+
+                    // if (msg.tip_date == 0) { // INT cu semn
+                    //     int sign = buffer[51];
+                    //     long payload = ntohl(*(uint32_t*) (buffer + 52));
+
+                    //     if (sign == 1) {
+                    //         payload *= (-1);
+                    //     }
+
+                    //     strcpy(msg.payload, to_string(payload).c_str());
+                    // }
+                    // else if (msg.tip_date == 1) { // SHORT_REAL
+                    //     float payload = ntohs(*(uint16_t*)(buffer + 51));
+                    //     payload = ((float) payload) / 100;
+
+                    //     strcpy(msg.payload, to_string(payload).c_str());
+                    // } else if (msg.tip_date == 2) {
+                    //     int sign = buffer[51];
+                    //     int power;
+                    //     double payload = ntohl(*(uint32_t*)(buffer + 52));
+                    //     char powerChar = buffer[56];
+                    //     power = (int)powerChar;
+                    //     double divider = 1;
+                    //     for (int i = 0; i < power; i++) {
+                    //         divider *= 10;
+                    //     }
+                    //     float floatNumber = ((float)payload) / divider;
+                    //     if (sign == 1) {
+                    //         floatNumber *= -1;
+                    //     }
+
+                    //     strcpy(msg.payload, to_string(payload).c_str());
+                    // } else {
+                    //     strcpy(msg.payload, buffer + 51);
+                    // }
+
+                    // memset(buffer, 0, BUFFLEN);
+                    // sprintf(buffer, "%s:%d - %s - %s - %s\n", inet_ntoa(clientAddr.sin_addr),
+                    //                         (ntohs(clientAddr.sin_port)),
+                    //                         msg.topic, &message[msg.tip_date][0], msg.payload);
+
+
+                    // for (auto it : topicId[msg.topic]) {
+                    //     string uId = it.first;
+
+                    //     if (idConnected[uId] == 2) {
+                    //         int skt = idSocketConnection[it.first];
+                    //         int result = send(skt, buffer, sizeof(buffer), 0);
+                    //         DIE(result < 0, "Eroare la trimiterea topicului!");
+                    //     } else if (it.second == 1) {
+                    //         messagesQueue[uId].push_back(string(buffer));
+                    //     }
+                    // }
+
                 } else if (i == sockTCP) { // un nou client se conecteaza
                     acceptedSock = accept(i, (struct sockaddr *) &clientAddr, &clientLen);
                     DIE(acceptedSock < 0, "Eroare la acceptarea unui nou client TCP!\n");
 
-                    FD_SET(acceptedSock, &readFds);
-                    fdMax = max(fdMax, acceptedSock);
+                    int nagle = setsockopt(acceptedSock, IPPROTO_TCP,
+                                            TCP_NODELAY, (char *)&(VALUE),
+                                            sizeof(int));
+                    DIE(nagle != 0, "Nu s-a putut da disable la Nagle!\n");
 
                     memset(buffer, 0, BUFFLEN);
                     int numberOfBytes = recv(acceptedSock, buffer, sizeof(buffer), 0);
                     DIE(numberOfBytes < 0, "Eroare la primirea ID-ului de la un client TCP\n");
 
+                    string buff = string(buffer);
+
+                    char answer[] = "exit";
+
+                    if (idConnected[buff] == 2) {
+                        cout << "Client " << buff << " already connected.\n";
+
+                        int ans = send(acceptedSock, answer, sizeof(answer), 0);
+                        DIE(ans < 0, "Nu se poate respunde clientul TCP deja existent!\n");
+                        close(acceptedSock);
+                        continue;
+                    }
+
+                    if (idConnected[buff] == 1) {
+                        for (auto it : messagesQueue[buff]) {
+                            int result = send(acceptedSock, it.c_str(), sizeof(it), 0);
+                            DIE(result < 0, "Eroare la trimiterea topicului la reconectarea clientului TCP!");
+                        }
+
+                        messagesQueue[buff].clear();
+                    }
+
+                    FD_SET(acceptedSock, &readFds);
+                    fdMax = max(fdMax, acceptedSock);
+
                     printf("New client %s connected from %s:%d.\n", buffer, 
                                 inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port));
 
-                    socketIdConnection[acceptedSock] = string(buffer);
-                    idConnected[string(buffer)] = true;
+                    socketIdConnection[acceptedSock] = buff;
+                    idSocketConnection[buff] = acceptedSock;
+                    idConnected[buff] = 2;
                 } else { // iau info de la un client TCP
                     memset(buffer, 0, BUFFLEN);
                     int numberOfBytes = recv(i, buffer, sizeof(buffer), 0);
@@ -139,11 +264,16 @@ int main(int argc, char **argv) {
                     if (numberOfBytes == 0) {
                         string id = socketIdConnection[i];
 
+                        for (auto it : messagesQueue[id]) {
+                            cout << it << "\n";
+                        }
+
                         cout << "Client " << id << " disconnected.\n";
                         close(i);
                         FD_CLR(i, &readFds);
+                        idConnected[id] = 1;
                         socketIdConnection.erase(i);
-                        idConnected[id] = false;
+                        idSocketConnection.erase(id);
                     } else {
                         string buff = string(buffer);
                         istringstream ss(buff);
@@ -152,24 +282,37 @@ int main(int argc, char **argv) {
                         string SF;
 
                         ss >> word;
+
+                        string backToClient = "";
                         
                         if (word == "subscribe") {
                             ss >> topic >> SF;
 
-                            topicId[topic].push_back(i);
+                            if (!checkExistence(topic, socketIdConnection[i])) {
+                                topicId[topic].push_back(make_pair(socketIdConnection[i], stoi(SF)));
+                            }
+
+                            backToClient = "Subscribed to topic.";
                         } else if (word == "unsubscribe") {
                             ss >> topic;
+
+                            for (int j = 0; j < topicId[topic].size(); ++j) {
+                                if (socketIdConnection[i] == topicId[topic][j].first) {
+                                    topicId[topic].erase(topicId[topic].begin() + j);
+                                    break;
+                                }
+                            }
+
+                            backToClient = "Unsubscribed from topic.";
                         }
 
+                        int ans = send(i, backToClient.c_str(), strlen(backToClient.c_str()), 0);
+                        DIE(ans < 0, "Nu se poate trimite mesaj la TCP!\n");
                     }
                 }
             }
         }
     }
-
-    // inchidem conexiunile
-    close(sockUDP);
-    close(sockTCP);
 
     return 0;
 }

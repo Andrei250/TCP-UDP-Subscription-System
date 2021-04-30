@@ -22,10 +22,10 @@ bool runClient = true;
 
 void closeClient() {
     runClient = false;
-    close(sock);
 }
 
 int main(int argc, char ** argv) {
+    setvbuf(stdout, NULL, _IONBF, BUFSIZ);
     FD_ZERO(&tmpFds);
     FD_ZERO(&readFds);
 
@@ -48,7 +48,7 @@ int main(int argc, char ** argv) {
 
     memset(buffer, 0, BUFFLEN);
     sprintf(buffer, "%s", argv[1]);
-    ans = send(sock, buffer, sizeof(buffer), 0);
+    ans = send(sock, buffer, strlen(buffer), 0);
     DIE(ans < 0, "Eroare la transmiterea ID-ului!\n");
 
     while (runClient) {
@@ -75,12 +75,8 @@ int main(int argc, char ** argv) {
 
                 string topic;
                 ss >> topic;
-
-                if (word == "subscribe") {
-                    cout << "Subscribed to " << topic << '\n';
-                } else {
-                    cout << "Unsubscribed from " << topic << '\n';
-                }
+            } else {
+                cout << "Nu exista aceasta comanda.\n";
             }
         } else {
             memset(buffer, 0, BUFFLEN);
@@ -88,12 +84,17 @@ int main(int argc, char ** argv) {
 			
             if (strcmp(buffer, "exit") == 0) {
                 closeClient();
+            } else if (strncmp(buffer, "Subscribed", 11) == 0 || 
+                        strncmp(buffer, "Unsubscribed", 13) == 0) {
+                cout << buffer << "\n";
+            }
+            else {
+                cout << buffer << "\n";
             }
         }
 
     }
 
     close(sock);
-
     return 0;
 }
