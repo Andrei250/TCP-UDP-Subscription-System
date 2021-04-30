@@ -1,6 +1,6 @@
 IP_SERVER = 127.0.0.1
 
-PORT = 12345
+PORT = 23456
 
 all: server subscriber udp
 

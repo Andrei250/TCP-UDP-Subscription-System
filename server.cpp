@@ -1,4 +1,6 @@
 #include <iostream>
+#include <iomanip>
+#include <math.h>
 #include <string>
 #include <string.h>
 #include <sys/types.h>
@@ -30,10 +32,10 @@ unordered_map<string, vector<pair<string, int>>> topicId;
 unordered_map<string, vector<string>> messagesQueue;
 unordered_map<string, int> idSocketConnection;
 const int VALUE = 1;
-string message[4] = {"INT", "SHORT REAL", "FLOAT", "STRING"};
+string message[4] = {"INT", "SHORT_REAL", "FLOAT", "STRING"};
 
 void portError(char *fileName) {
-    fprintf(stderr, "Fisierul %s nu are un PORT specificat\n", fileName);
+    fprintf(stderr, "Fisierul %s nu are un PORT specificat", fileName);
     exit(1);
 }
 
@@ -42,17 +44,17 @@ void openSockets() {
     sockTCP = socket(AF_INET, SOCK_STREAM, 0);
     DIE(sockTCP < 0, "Socket-ul TCP nu a putut fi creat!\n");
 
-    int binder = bind(sockTCP, (struct sockaddr *) &servAddr, sockLen);
-    DIE(binder < 0, "Nu s-a putut face bind pe socket-ul TCP!\n");
+    int binder = bind(sockTCP, (struct sockaddr *) &servAddr, sizeof(servAddr));
+    DIE(binder < 0, "Nu s-a putut face bind pe socket-ul TCP!");
 
-    int listener = listen(sockTCP, SOMAXCONN);
-    DIE(listener < 0, "Nu s-a putut asculta pe socket-ul TCP!\n");
+    int listener = listen(sockTCP, SOMAXCONN / 4);
+    DIE(listener < 0, "Nu s-a putut asculta pe socket-ul TCP!");
 
-    sockUDP = socket(AF_INET, SOCK_DGRAM, 0);
-    DIE(sockUDP < 0, "Socket-ul UDP nu a putut fi creat!\n");
+    sockUDP = socket(PF_INET, SOCK_DGRAM, 0);
+    DIE(sockUDP < 0, "Socket-ul UDP nu a putut fi creat!");
 
-    binder = bind(sockUDP, (struct sockaddr *) &servAddr, sockLen);
-    DIE(binder < 0, "Nu s-a putut face bind pe socket-ul UDP!\n");
+    binder = bind(sockUDP, (struct sockaddr *) &servAddr, sizeof(servAddr));
+    DIE(binder < 0, "Nu s-a putut face bind pe socket-ul UDP!");
 }
 
 void closeServer() {
@@ -63,7 +65,7 @@ void closeServer() {
     for (int i = 3; i <= fdMax; ++i) {
         if (FD_ISSET(i, &readFds) && i != sockUDP && i != sockTCP) {
             int ans = send(i, buffer, sizeof(buffer), 0);
-            DIE(ans < 0, "Nu se poate comunica cu clientul TCP!\n");
+            DIE(ans < 0, "Nu se poate comunica cu clientul TCP!");
             close(i);
         }
     }
@@ -115,125 +117,117 @@ int main(int argc, char **argv) {
         tmpFds = readFds;
         // selectam un file descriptor de pe care sa citim
         valoareReturnata = select(fdMax + 1, &tmpFds, NULL, NULL, NULL);
-        DIE(valoareReturnata < 0, "Eroare la selectia socket-ului de citire!\n");
+        DIE(valoareReturnata < 0, "Eroare la selectia socket-ului de citire!");
 
         for (int i = 0; i <= fdMax && runServer; ++i) {
             if (FD_ISSET(i, &tmpFds)) {
                 if (i == 0) { // citesc de la STDIN comenzi
-                    memset(buffer, 0, BUFFLEN);
+                    char reader[BUFFLEN];
 
-                    cin.getline(buffer, BUFFLEN);
-                    
-                    if (strcmp(buffer, "exit") == 0) {
+                    cin.getline(reader, BUFFLEN - 1);
+
+                    if (strcmp(reader, "exit") == 0) {
                         closeServer();
                     } else {
                         cout << "Nu exista aceasta comanda.\n";
                     }
                 } else if (i == sockUDP) { // iau info de la un client UDP
-                    continue;
                     clientLen = sizeof(clientAddr);
                     memset(&clientAddr, 0, sizeof(clientAddr));
-                    memset(buffer, 0, BUFFLEN);      
-                    int ans = recvfrom(i, (char *)buffer, BUFFLEN, 0, (struct sockaddr *) &clientAddr, &clientLen);
-                    DIE(ans < 0, "Nu s-a putut prelua mesajul de la clientul UDP!\n");
+                    char bfr[1551];
+
+                    int ans = recvfrom(i, bfr, sizeof(bfr), 0, (struct sockaddr *) &clientAddr, &clientLen);
+                    DIE(ans < 0, "Nu s-a putut prelua mesajul de la clientul UDP!");
 
                     udp_message msg;
                     char dataType[2];
 
-                    // sscanf(buffer, "%s %s %s", msg.topic, dataType, msg.payload);
-                    // msg.tip_date = dataType[0];
-                    udp_message * msg2 = (udp_message*) buffer;
+                    strcpy(msg.topic, bfr); // topic
+                    msg.tip_date = bfr[50]; // data_type
 
-                    strcpy(msg.topic, buffer); // topic
-                    msg.tip_date = buffer[50]; // data_type
+                    if (msg.tip_date == 0) { // INT cu semn
+                        int sign = bfr[51];
+                        long payload = ntohl(*(uint32_t*) (bfr + 52));
 
-                    char mess[50];
-                    strcpy(mess, "DADADA");
+                        if (sign == 1) {
+                            payload *= (-1);
+                        }
 
-                    for (int j = 3; j <= fdMax; ++j) {
-                        if (FD_ISSET(j, &readFds)) {
-                            if (msg2->tip_date == 0 && j != sockTCP && j != sockUDP) {
-                                send(j, mess, strlen(mess), 0);
-                            }
+                        strcpy(msg.payload, to_string(payload).c_str());
+                    }
+                    else if (msg.tip_date == 1) { // SHORT_REAL
+                        double payload = (1.0 * ntohs(*(uint16_t*)(bfr + 51))) / 100;
+                        ostringstream strOutput;
+
+                        if (floor(payload) == payload) {
+                            strOutput << fixed << setprecision(0) << payload;
+                        } else {
+                            strOutput << fixed << setprecision(2) << payload;
+                        }
+
+                        strcpy(msg.payload, strOutput.str().c_str());
+                    } else if (msg.tip_date == 2) {
+                        int sign = bfr[51];
+                        ostringstream strOutput;
+                        int power = (uint8_t) bfr[56];
+                        double pwr = pow(10, power);
+                        double output = (1.0 * (ntohl(*(uint32_t*)(bfr + 52)))) / pwr;
+
+                        if (sign == 1) {
+                            output *= -1;
+                        }
+
+                        if (floor(output) == output) {
+                            strOutput << fixed << setprecision(0) << output;
+                        } else {
+                            strOutput << fixed << setprecision(4) << output;
+                        }
+
+                        strcpy(msg.payload, strOutput.str().c_str());
+                    } else {
+                        strcpy(msg.payload, bfr + 51);
+                    }
+
+                    memset(buffer, 0, BUFFLEN);
+                    sprintf(buffer, "%s:%d - %s - %s - %s", inet_ntoa(clientAddr.sin_addr),
+                                            (ntohs(clientAddr.sin_port)),
+                                            msg.topic, &message[msg.tip_date][0], msg.payload);
+
+
+                    for (auto it : topicId[msg.topic]) {
+                        string uId = it.first;
+
+                        if (idConnected[uId] == 2) {
+                            int skt = idSocketConnection[it.first];
+                            int result = send(skt, buffer, sizeof(buffer), 0);
+                            DIE(result < 0, "Eroare la trimiterea topicului!");
+                        } else if (it.second == 1) {
+                            messagesQueue[uId].push_back(string(buffer));
                         }
                     }
-                    
-
-                    // if (msg.tip_date == 0) { // INT cu semn
-                    //     int sign = buffer[51];
-                    //     long payload = ntohl(*(uint32_t*) (buffer + 52));
-
-                    //     if (sign == 1) {
-                    //         payload *= (-1);
-                    //     }
-
-                    //     strcpy(msg.payload, to_string(payload).c_str());
-                    // }
-                    // else if (msg.tip_date == 1) { // SHORT_REAL
-                    //     float payload = ntohs(*(uint16_t*)(buffer + 51));
-                    //     payload = ((float) payload) / 100;
-
-                    //     strcpy(msg.payload, to_string(payload).c_str());
-                    // } else if (msg.tip_date == 2) {
-                    //     int sign = buffer[51];
-                    //     int power;
-                    //     double payload = ntohl(*(uint32_t*)(buffer + 52));
-                    //     char powerChar = buffer[56];
-                    //     power = (int)powerChar;
-                    //     double divider = 1;
-                    //     for (int i = 0; i < power; i++) {
-                    //         divider *= 10;
-                    //     }
-                    //     float floatNumber = ((float)payload) / divider;
-                    //     if (sign == 1) {
-                    //         floatNumber *= -1;
-                    //     }
-
-                    //     strcpy(msg.payload, to_string(payload).c_str());
-                    // } else {
-                    //     strcpy(msg.payload, buffer + 51);
-                    // }
-
-                    // memset(buffer, 0, BUFFLEN);
-                    // sprintf(buffer, "%s:%d - %s - %s - %s\n", inet_ntoa(clientAddr.sin_addr),
-                    //                         (ntohs(clientAddr.sin_port)),
-                    //                         msg.topic, &message[msg.tip_date][0], msg.payload);
-
-
-                    // for (auto it : topicId[msg.topic]) {
-                    //     string uId = it.first;
-
-                    //     if (idConnected[uId] == 2) {
-                    //         int skt = idSocketConnection[it.first];
-                    //         int result = send(skt, buffer, sizeof(buffer), 0);
-                    //         DIE(result < 0, "Eroare la trimiterea topicului!");
-                    //     } else if (it.second == 1) {
-                    //         messagesQueue[uId].push_back(string(buffer));
-                    //     }
-                    // }
 
                 } else if (i == sockTCP) { // un nou client se conecteaza
                     acceptedSock = accept(i, (struct sockaddr *) &clientAddr, &clientLen);
-                    DIE(acceptedSock < 0, "Eroare la acceptarea unui nou client TCP!\n");
+                    DIE(acceptedSock < 0, "Eroare la acceptarea unui nou client TCP!");
 
                     int nagle = setsockopt(acceptedSock, IPPROTO_TCP,
                                             TCP_NODELAY, (char *)&(VALUE),
                                             sizeof(int));
-                    DIE(nagle != 0, "Nu s-a putut da disable la Nagle!\n");
+                    DIE(nagle != 0, "Nu s-a putut da disable la Nagle!");
 
-                    memset(buffer, 0, BUFFLEN);
-                    int numberOfBytes = recv(acceptedSock, buffer, sizeof(buffer), 0);
-                    DIE(numberOfBytes < 0, "Eroare la primirea ID-ului de la un client TCP\n");
+                    memset(buffy, 0, BUFFLEN);
+                    int numberOfBytes = recv(acceptedSock, buffy, BUFFLEN, 0);
+                    DIE(numberOfBytes < 0, "Eroare la primirea ID-ului de la un client TCP");
 
-                    string buff = string(buffer);
+                    string buff = string(buffy);
 
                     char answer[] = "exit";
 
                     if (idConnected[buff] == 2) {
                         cout << "Client " << buff << " already connected.\n";
 
-                        int ans = send(acceptedSock, answer, sizeof(answer), 0);
-                        DIE(ans < 0, "Nu se poate respunde clientul TCP deja existent!\n");
+                        int ans = send(acceptedSock, answer, strlen(answer), 0);
+                        DIE(ans < 0, "Nu se poate respunde clientul TCP deja existent!");
                         close(acceptedSock);
                         continue;
                     }
@@ -250,7 +244,7 @@ int main(int argc, char **argv) {
                     FD_SET(acceptedSock, &readFds);
                     fdMax = max(fdMax, acceptedSock);
 
-                    printf("New client %s connected from %s:%d.\n", buffer, 
+                    printf("New client %s connected from %s:%d.\n", buffy, 
                                 inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port));
 
                     socketIdConnection[acceptedSock] = buff;
@@ -259,14 +253,10 @@ int main(int argc, char **argv) {
                 } else { // iau info de la un client TCP
                     memset(buffer, 0, BUFFLEN);
                     int numberOfBytes = recv(i, buffer, sizeof(buffer), 0);
-                    DIE(numberOfBytes < 0, "Eroare la primirea informatiilor de la un client TCP!\n");
+                    DIE(numberOfBytes < 0, "Eroare la primirea informatiilor de la un client TCP!");
 
                     if (numberOfBytes == 0) {
                         string id = socketIdConnection[i];
-
-                        for (auto it : messagesQueue[id]) {
-                            cout << it << "\n";
-                        }
 
                         cout << "Client " << id << " disconnected.\n";
                         close(i);
@@ -307,7 +297,7 @@ int main(int argc, char **argv) {
                         }
 
                         int ans = send(i, backToClient.c_str(), strlen(backToClient.c_str()), 0);
-                        DIE(ans < 0, "Nu se poate trimite mesaj la TCP!\n");
+                        DIE(ans < 0, "Nu se poate trimite mesaj la TCP!");
                     }
                 }
             }
