@@ -77,7 +77,7 @@ int main(int argc, char ** argv) {
             }
         } else {
             memset(buffer, 0, BUFFLEN);
-            int number = -1, received_size = 0;
+            int number = -1;
             int start = 0;
 
             while (start < BUFFLEN && (number = recv(sock, (&buffer) + start, BUFFLEN - start, 0)) > 0) {

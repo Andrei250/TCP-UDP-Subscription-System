@@ -135,9 +135,10 @@ int main(int argc, char **argv) {
                     clientLen = sizeof(clientAddr);
                     memset(&clientAddr, 0, sizeof(clientAddr));
                     char bfr[UDPBUFF];
-                    int ans;
 
-                    memset(bfr, 0, UDPBUFF);    
+                    memset(bfr, 0, UDPBUFF);
+
+                    int ans = -1;
 
                     ans = recvfrom(i, bfr, UDPBUFF, 0, (struct sockaddr *) &clientAddr, &clientLen);
                     DIE(ans < 0, "Nu s-a putut prelua mesajul de la clientul UDP!");
@@ -255,6 +256,7 @@ int main(int argc, char **argv) {
                     idConnected[buff] = 2;
                 } else { // iau info de la un client TCP
                     memset(buffer, 0, BUFFLEN);
+
                     int numberOfBytes = recv(i, buffer, BUFFLEN, 0);
                     DIE(numberOfBytes < 0, "Eroare la primirea informatiilor de la un client TCP!");
 
