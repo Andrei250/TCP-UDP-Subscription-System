@@ -137,7 +137,7 @@ int main(int argc, char **argv) {
                     char bfr[UDPBUFF];
                     int ans;
 
-                    memset(bfr, 0, UDPBUFF);
+                    memset(bfr, 0, UDPBUFF);    
 
                     ans = recvfrom(i, bfr, UDPBUFF, 0, (struct sockaddr *) &clientAddr, &clientLen);
                     DIE(ans < 0, "Nu s-a putut prelua mesajul de la clientul UDP!");
@@ -255,7 +255,7 @@ int main(int argc, char **argv) {
                     idConnected[buff] = 2;
                 } else { // iau info de la un client TCP
                     memset(buffer, 0, BUFFLEN);
-                    int numberOfBytes = recv(i, buffer, sizeof(buffer), 0);
+                    int numberOfBytes = recv(i, buffer, BUFFLEN, 0);
                     DIE(numberOfBytes < 0, "Eroare la primirea informatiilor de la un client TCP!");
 
                     if (numberOfBytes == 0) {
@@ -299,7 +299,7 @@ int main(int argc, char **argv) {
                             backToClient = "Unsubscribed from topic.";
                         }
 
-                        int ans = send(i, backToClient.c_str(), strlen(backToClient.c_str()), 0);
+                        int ans = send(i, backToClient.c_str(), BUFFLEN, 0);
                         DIE(ans < 0, "Nu se poate trimite mesaj la TCP!");
                     }
                 }

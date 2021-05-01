@@ -70,14 +70,20 @@ int main(int argc, char ** argv) {
             if (strcmp(reader, "exit") == 0) {
                 closeClient();
             } else if (word == "subscribe" || word == "unsubscribe") {
-                ans = send(sock, reader, strlen(reader), 0);
+                ans = send(sock, reader, BUFFLEN, 0);
                 DIE(ans < 0, "Nu s-a putut trimite la server de la clientul TCP!");
             } else {
                 cout << "Nu exista aceasta comanda.\n";
             }
         } else {
             memset(buffer, 0, BUFFLEN);
-			int number = recv(sock, buffer, sizeof(buffer), 0);
+            int number = -1, received_size = 0;
+            int start = 0;
+
+            while (start < BUFFLEN && (number = recv(sock, (&buffer) + start, BUFFLEN - start, 0)) > 0) {
+                start = start + number;
+            }
+
             DIE(number < 0, "Eroare la primirea de informatie de la server!");
 
             if (strcmp(buffer, "exit") == 0) {
