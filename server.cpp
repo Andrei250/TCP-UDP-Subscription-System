@@ -135,8 +135,11 @@ int main(int argc, char **argv) {
                     clientLen = sizeof(clientAddr);
                     memset(&clientAddr, 0, sizeof(clientAddr));
                     char bfr[UDPBUFF];
+                    int ans;
 
-                    int ans = recvfrom(i, bfr, sizeof(bfr), 0, (struct sockaddr *) &clientAddr, &clientLen);
+                    memset(bfr, 0, UDPBUFF);
+
+                    ans = recvfrom(i, bfr, UDPBUFF, 0, (struct sockaddr *) &clientAddr, &clientLen);
                     DIE(ans < 0, "Nu s-a putut prelua mesajul de la clientul UDP!");
 
                     udp_message msg;
