@@ -3,7 +3,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#define BUFFLEN 2500
+#define BUFFLEN 2000
 
 #define DIE(assertion, call_description)	\
 	do {									\

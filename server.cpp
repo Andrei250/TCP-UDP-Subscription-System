@@ -234,7 +234,7 @@ int main(int argc, char **argv) {
 
                     if (idConnected[buff] == 1) {
                         for (auto it : messagesQueue[buff]) {
-                            int result = send(acceptedSock, it.c_str(), strlen(it.c_str()), 0);
+                            int result = send(acceptedSock, it.c_str(), BUFFLEN, 0);
                             DIE(result < 0, "Eroare la trimiterea topicului la reconectarea clientului TCP!");
                         }
 
