@@ -23,17 +23,24 @@ struct sockaddr_in servAddr, clientAddr;
 socklen_t sockLen = sizeof(struct sockaddr_in);
 socklen_t clientLen = sizeof(struct sockaddr_in);
 fd_set readFds, tmpFds;
-int fdMax, valoareReturnata;
+int fdMax, valoareRet;
 char buffer[BUFFLEN], buffy[BUFFLEN];
 bool runServer = true;
+// pt fiecare fd, IDul clientului
 unordered_map<int, string> socketIdConnection;
-unordered_map<string, int> idConnected;// 0 nu a fost deloc, 1 a fost, 2 e conectat
+// 0 nu a fost deloc, 1 a fost, 2 e conectat
+unordered_map<string, int> idConnected;
+// pentru fiecare topic retin IDul si SF-ul
 unordered_map<string, vector<pair<string, int>>> topicId;
+// coada cu mesaje
 unordered_map<string, vector<string>> messagesQueue;
+// unde se afla fiecare clent ( pe ce fd )
 unordered_map<string, int> idSocketConnection;
+// valoare pt Neagle alg
 const int VALUE = 1;
 string message[4] = {"INT", "SHORT_REAL", "FLOAT", "STRING"};
 
+// functie pentru nerespectarea input-ului
 void portError(char *fileName) {
     fprintf(stderr, "Fisierul %s nu are un PORT specificat", fileName);
     exit(1);
@@ -44,7 +51,8 @@ void openSockets() {
     sockTCP = socket(AF_INET, SOCK_STREAM, 0);
     DIE(sockTCP < 0, "Socket-ul TCP nu a putut fi creat!\n");
 
-    int binder = bind(sockTCP, (struct sockaddr *) &servAddr, sizeof(servAddr));
+    int binder = bind(sockTCP, (struct sockaddr *) &servAddr,
+                    sizeof(servAddr));
     DIE(binder < 0, "Nu s-a putut face bind pe socket-ul TCP!");
 
     int listener = listen(sockTCP, SOMAXCONN / 4);
@@ -57,6 +65,7 @@ void openSockets() {
     DIE(binder < 0, "Nu s-a putut face bind pe socket-ul UDP!");
 }
 
+// oresc serverul si toti clientii acestuia
 void closeServer() {
     runServer = false;
     memset(buffer, 0, BUFFLEN);
@@ -74,6 +83,7 @@ void closeServer() {
     close(sockTCP);
 }
 
+// verific daca deja un client este abonat la topicul respectiv
 bool checkExistence(string topic, string client) {
     for (auto it : topicId[topic]) {
         if (it.first == client) {
@@ -103,6 +113,7 @@ int main(int argc, char **argv) {
     servAddr.sin_port = htons(port);
     servAddr.sin_addr.s_addr = INADDR_ANY;
 
+    // deschid socketurile
     openSockets();    
 
     // completam multimea file descriptorilor de citire cu STDIN si socketii
@@ -116,9 +127,10 @@ int main(int argc, char **argv) {
     while (runServer) {
         tmpFds = readFds;
         // selectam un file descriptor de pe care sa citim
-        valoareReturnata = select(fdMax + 1, &tmpFds, NULL, NULL, NULL);
-        DIE(valoareReturnata < 0, "Eroare la selectia socket-ului de citire!");
+        valoareRet = select(fdMax + 1, &tmpFds, NULL, NULL, NULL);
+        DIE(valoareRet < 0, "Eroare la selectia socket-ului de citire!");
 
+        // parcurg toti fds pentru a afla de unde primec informatie
         for (int i = 0; i <= fdMax && runServer; ++i) {
             if (FD_ISSET(i, &tmpFds)) {
                 if (i == 0) { // citesc de la STDIN comenzi
@@ -135,13 +147,13 @@ int main(int argc, char **argv) {
                     clientLen = sizeof(clientAddr);
                     memset(&clientAddr, 0, sizeof(clientAddr));
                     char bfr[UDPBUFF];
-
-                    memset(bfr, 0, UDPBUFF);
-
                     int ans = -1;
 
-                    ans = recvfrom(i, bfr, UDPBUFF, 0, (struct sockaddr *) &clientAddr, &clientLen);
-                    DIE(ans < 0, "Nu s-a putut prelua mesajul de la clientul UDP!");
+                    // preiau informatia de la UDP
+                    memset(bfr, 0, UDPBUFF);
+                    ans = recvfrom(i, bfr, UDPBUFF, 0,
+                        (struct sockaddr *) &clientAddr, &clientLen);
+                    DIE(ans < 0, "Nu s-a putut prelua de la clientul UDP!");
 
                     udp_message msg;
                     char dataType[2];
@@ -160,7 +172,8 @@ int main(int argc, char **argv) {
                         strcpy(msg.payload, to_string(payload).c_str());
                     }
                     else if (msg.tip_date == 1) { // SHORT_REAL
-                        double payload = (1.0 * ntohs(*(uint16_t*)(bfr + 51))) / 100;
+                        double payload = 1.0 * ntohs(*(uint16_t*)(bfr + 51));
+                        payload = payload / 100;
                         ostringstream strOutput;
 
                         if (floor(payload) == payload) {
@@ -170,12 +183,12 @@ int main(int argc, char **argv) {
                         }
 
                         strcpy(msg.payload, strOutput.str().c_str());
-                    } else if (msg.tip_date == 2) {
+                    } else if (msg.tip_date == 2) { // FLOAT
                         int sign = bfr[51];
                         ostringstream strOutput;
-                        int power = (uint8_t) bfr[56];
-                        double pwr = pow(10, power);
-                        double output = (1.0 * (ntohl(*(uint32_t*)(bfr + 52)))) / pwr;
+                        double pwr = pow(10, (uint8_t) bfr[56]);
+                        double output = 1.0 * (ntohl(*(uint32_t*)(bfr + 52)));
+                        output = output / pwr;
 
                         if (sign == 1) {
                             output *= -1;
@@ -188,58 +201,82 @@ int main(int argc, char **argv) {
                         }
 
                         strcpy(msg.payload, strOutput.str().c_str());
-                    } else {
+                    } else { // STRING
                         strcpy(msg.payload, bfr + 51);
                     }
 
+                    // construirea mesajului pentru client
                     memset(buffer, 0, BUFFLEN);
-                    sprintf(buffer, "%s:%d - %s - %s - %s", inet_ntoa(clientAddr.sin_addr),
-                                            (ntohs(clientAddr.sin_port)),
-                                            msg.topic, &message[msg.tip_date][0], msg.payload);
+                    sprintf(buffer, "%s:%d - %s - %s - %s",
+                            inet_ntoa(clientAddr.sin_addr),
+                            (ntohs(clientAddr.sin_port)),
+                            msg.topic, &message[msg.tip_date][0],
+                            msg.payload);
 
-
+                    // parcurgerea tuturor subscriberilor al acelui topic
                     for (auto it : topicId[msg.topic]) {
                         string uId = it.first;
 
+                        // daca e onlin ii trimit mesajul
                         if (idConnected[uId] == 2) {
                             int skt = idSocketConnection[it.first];
                             int result = send(skt, buffer, BUFFLEN, 0);
-                            DIE(result < 0, "Eroare la trimiterea topicului!");
+                            DIE(result < 0, "Eroare la trimiterea topicului");
                         } else if (it.second == 1) {
+                            // daca nu e online il pu intr-o coada
+                            // pentru a-l trimite mai tarziu
                             messagesQueue[uId].push_back(string(buffer));
                         }
                     }
 
                 } else if (i == sockTCP) { // un nou client se conecteaza
-                    acceptedSock = accept(i, (struct sockaddr *) &clientAddr, &clientLen);
-                    DIE(acceptedSock < 0, "Eroare la acceptarea unui nou client TCP!");
+                    // il acceptam
+                    acceptedSock = accept(i,
+                                    (struct sockaddr *) &clientAddr,
+                                    &clientLen);
+                    DIE(acceptedSock < 0,
+                        "Eroare la acceptarea unui nou client TCP!");
 
+                    // dezactivam algoritum nagle
                     int nagle = setsockopt(acceptedSock, IPPROTO_TCP,
                                             TCP_NODELAY, (char *)&(VALUE),
                                             sizeof(int));
                     DIE(nagle != 0, "Nu s-a putut da disable la Nagle!");
 
+                    // primim de la cient IDul acestuia
                     memset(buffy, 0, BUFFLEN);
                     int numberOfBytes = recv(acceptedSock, buffy, BUFFLEN, 0);
-                    DIE(numberOfBytes < 0, "Eroare la primirea ID-ului de la un client TCP");
+                    DIE(numberOfBytes < 0,
+                        "Eroare la primirea ID-ului de la un client TCP");
 
                     string buff = string(buffy);
 
                     char answer[] = "exit";
 
+                    // daca este deja conectat inchid coneiunea
+                    // trimit mesajul de exit catre client
                     if (idConnected[buff] == 2) {
                         cout << "Client " << buff << " already connected.\n";
 
-                        int ans = send(acceptedSock, answer, strlen(answer), 0);
-                        DIE(ans < 0, "Nu se poate respunde clientul TCP deja existent!");
+                        int ans = send(acceptedSock,
+                                        answer,
+                                        strlen(answer),
+                                        0);
+                        DIE(ans < 0,
+                            "Nu se poate respunde clientul deja existent!");
                         close(acceptedSock);
                         continue;
                     }
 
+                    // daca a mai fost conectat ii trimitem mesajele restante
                     if (idConnected[buff] == 1) {
                         for (auto it : messagesQueue[buff]) {
-                            int result = send(acceptedSock, it.c_str(), BUFFLEN, 0);
-                            DIE(result < 0, "Eroare la trimiterea topicului la reconectarea clientului TCP!");
+                            int result = send(acceptedSock,
+                                            it.c_str(),
+                                            BUFFLEN,
+                                            0);
+                            DIE(result < 0,
+                                "Eroare trimitere topic la reconectare!");
                         }
 
                         messagesQueue[buff].clear();
@@ -248,19 +285,23 @@ int main(int argc, char **argv) {
                     FD_SET(acceptedSock, &readFds);
                     fdMax = max(fdMax, acceptedSock);
 
-                    printf("New client %s connected from %s:%d.\n", buffy, 
-                                inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port));
+                    printf("New client %s connected from %s:%d.\n",
+                                buffy, 
+                                inet_ntoa(clientAddr.sin_addr),
+                                ntohs(clientAddr.sin_port));
 
+                    // retin perechea socket <-> ID client
                     socketIdConnection[acceptedSock] = buff;
                     idSocketConnection[buff] = acceptedSock;
                     idConnected[buff] = 2;
                 } else { // iau info de la un client TCP
                     memset(buffer, 0, BUFFLEN);
-
+                    // preluam informatia de la client
                     int numberOfBytes = recv(i, buffer, BUFFLEN, 0);
-                    DIE(numberOfBytes < 0, "Eroare la primirea informatiilor de la un client TCP!");
+                    DIE(numberOfBytes < 0,
+                        "Eroare primire info de la client!");
 
-                    if (numberOfBytes == 0) {
+                    if (numberOfBytes == 0) { // clientul s-a deconectat
                         string id = socketIdConnection[i];
 
                         cout << "Client " << id << " disconnected.\n";
@@ -269,7 +310,7 @@ int main(int argc, char **argv) {
                         idConnected[id] = 1;
                         socketIdConnection.erase(i);
                         idSocketConnection.erase(id);
-                    } else {
+                    } else { // primit un pachet
                         string buff = string(buffer);
                         istringstream ss(buff);
                         string word;
@@ -280,20 +321,27 @@ int main(int argc, char **argv) {
 
                         string backToClient = "";
                         
-                        if (word == "subscribe") {
+                        if (word == "subscribe") {// un client da subscribe
                             ss >> topic >> SF;
 
-                            if (!checkExistence(topic, socketIdConnection[i])) {
-                                topicId[topic].push_back(make_pair(socketIdConnection[i], stoi(SF)));
+                            string uId = socketIdConnection[i];
+
+                            // verificam daca clientul este deja abonat
+                            if (!checkExistence(topic, uId)) {
+                                topicId[topic].push_back(
+                                    make_pair(uId, stoi(SF)));
                             }
 
                             backToClient = "Subscribed to topic.";
-                        } else if (word == "unsubscribe") {
+                        } else if (word == "unsubscribe") {// unsubscribe
                             ss >> topic;
 
+                            // sterg utilizatorul de la topicul respectiv
                             for (int j = 0; j < topicId[topic].size(); ++j) {
-                                if (socketIdConnection[i] == topicId[topic][j].first) {
-                                    topicId[topic].erase(topicId[topic].begin() + j);
+                                if (socketIdConnection[i] ==
+                                    topicId[topic][j].first) {
+                                    topicId[topic].erase(
+                                        topicId[topic].begin() + j);
                                     break;
                                 }
                             }
@@ -301,6 +349,7 @@ int main(int argc, char **argv) {
                             backToClient = "Unsubscribed from topic.";
                         }
 
+                        // trimit informatia inapoi
                         int ans = send(i, backToClient.c_str(), BUFFLEN, 0);
                         DIE(ans < 0, "Nu se poate trimite mesaj la TCP!");
                     }
