@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #define BUFFLEN 2000
+#define UDPBUFF 1551
 
 #define DIE(assertion, call_description)	\
 	do {									\

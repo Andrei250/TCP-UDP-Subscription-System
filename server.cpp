@@ -134,7 +134,7 @@ int main(int argc, char **argv) {
                 } else if (i == sockUDP) { // iau info de la un client UDP
                     clientLen = sizeof(clientAddr);
                     memset(&clientAddr, 0, sizeof(clientAddr));
-                    char bfr[1551];
+                    char bfr[UDPBUFF];
 
                     int ans = recvfrom(i, bfr, sizeof(bfr), 0, (struct sockaddr *) &clientAddr, &clientLen);
                     DIE(ans < 0, "Nu s-a putut prelua mesajul de la clientul UDP!");
@@ -199,7 +199,7 @@ int main(int argc, char **argv) {
 
                         if (idConnected[uId] == 2) {
                             int skt = idSocketConnection[it.first];
-                            int result = send(skt, buffer, sizeof(buffer), 0);
+                            int result = send(skt, buffer, BUFFLEN, 0);
                             DIE(result < 0, "Eroare la trimiterea topicului!");
                         } else if (it.second == 1) {
                             messagesQueue[uId].push_back(string(buffer));
