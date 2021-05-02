@@ -55,14 +55,9 @@ Flow-ul serverului:
         - parsez informatia si il pun in hashmapul potrivit
         - trimit un mesaj de rapuns inapoi
 
-structuri folosite:
+Structuri folosite:
     - unordered_map pentru ca toate interogarile, insertiile si tergerile
         sa fie facute in O(1) -> rapiditate
     - vector din STL -> usor defolosit
     - string din STL -> usor de folosit
     - udp_message -> pentru a retine informatiile unui pachet udp
-
-Mentiuni:
-    - pentru 15 iteratii de UDP in checker, trec toate testele mereu
-    - pentru 30, are momente cand nu primeste cateva mesaje
-    - am incercat sa o rezolv prin mai multe mijloace, insa nimic

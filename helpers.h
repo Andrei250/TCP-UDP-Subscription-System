@@ -3,7 +3,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#define BUFFLEN 2000
+#define BUFFLEN 1580
 #define UDPBUFF 1551
 
 #define DIE(assertion, call_description)	\

@@ -73,7 +73,7 @@ void closeServer() {
 
     for (int i = 3; i <= fdMax; ++i) {
         if (FD_ISSET(i, &readFds) && i != sockUDP && i != sockTCP) {
-            int ans = send(i, buffer, sizeof(buffer), 0);
+            int ans = send(i, buffer, BUFFLEN, 0);
             DIE(ans < 0, "Nu se poate comunica cu clientul TCP!");
             close(i);
         }
@@ -260,7 +260,7 @@ int main(int argc, char **argv) {
 
                         int ans = send(acceptedSock,
                                         answer,
-                                        strlen(answer),
+                                        BUFFLEN,
                                         0);
                         DIE(ans < 0,
                             "Nu se poate respunde clientul deja existent!");
